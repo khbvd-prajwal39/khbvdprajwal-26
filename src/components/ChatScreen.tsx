@@ -2,7 +2,7 @@ import { t } from '@/i18n/translations';
 import { isHealthRelated, generateAssistantResponse } from '@/data/tiers';
 import type { LanguageCode, Doctor, TierInfo, ChatMessage } from '@/types';
 import {
-  ArrowLeft, Send, Paperclip, Mic, Image, FileText, X, Circle, BadgeCheck, Star, MicOff, LockKeyhole, MessageSquare, Clock3, IndianRupee, Pill
+  ArrowLeft, Send, Paperclip, Mic, Image, FileText, X, Circle, BadgeCheck, Star, MicOff, LockKeyhole, MessageSquare, Clock3
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 
@@ -38,27 +38,10 @@ interface Props {
 }
 
 const PRESCRIPTION_KEYWORDS = ['prescription', 'prescribe', 'medicine', 'medication', 'tablet', 'tablet name', 'dose', 'dosage', 'syrup', 'cream', 'ointment', 'rx'];
-const PRESCRIPTION_RESPONSE_KEYWORDS = ['prescription', 'prescribe', 'tablet', 'mg', 'ml', 'syrup', 'cream', 'ointment', 'take', 'dose', 'dosage', 'twice', 'thrice', 'once daily', 'after food', 'before food', 'rx'];
 
 function isPrescriptionRequest(text: string): boolean {
   const lower = text.toLowerCase();
   return PRESCRIPTION_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-function replyContainsPrescription(text: string): boolean {
-  const lower = text.toLowerCase();
-  return PRESCRIPTION_RESPONSE_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-function generatePrescriptionResponse(complaint: string): string {
-  return `Based on your complaint of ${complaint.toLowerCase()}, here is your prescription:
-
-1. Tablet Paracetamol 500mg — Take 1 tablet twice daily after food for 3 days (for pain/fever relief)
-2. Tablet Cetirizine 10mg — Take 1 tablet at night before sleep for 5 days (for allergy/inflammation)
-3. Antiseptic ointment — Apply a thin layer on the affected area twice daily
-4. Warm saltwater gargles — 3 times daily
-
-Please consult in person if symptoms worsen or do not improve within 5 days. This prescription is provided as part of your consultation.`;
 }
 
 export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptomDuration, onBack, onEnd }: Props) {
@@ -77,14 +60,11 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
   const [isDoctorReplied, setIsDoctorReplied] = useState(false);
   const [blockedNotice, setBlockedNotice] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
-  const [balanceRemaining, setBalanceRemaining] = useState(tier.price);
-  const [penaltyDeducted, setPenaltyDeducted] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const maxTexts = tier.texts ?? 0;
-  const perTextCost = maxTexts > 0 ? tier.price / maxTexts : 0;
   const textsRemaining = Math.max(0, maxTexts - messageCount);
   const canSend = maxTexts === 0 || textsRemaining > 0;
 
@@ -122,16 +102,9 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
       createdAt: new Date().toISOString(),
     };
 
-    const newCount = messageCount + 1;
-    const deduction = perTextCost;
-    const newBalance = Math.max(0, balanceRemaining - deduction);
-
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setAttachments([]);
-    setBlockedNotice(false);
-    setMessageCount(newCount);
-    setBalanceRemaining(newBalance);
 
     if (!isHealthRelated(text)) {
       setBlockedNotice(true);
@@ -148,6 +121,9 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
       return;
     }
 
+    setBlockedNotice(false);
+    const newCount = messageCount + 1;
+    setMessageCount(newCount);
     const wantsPrescription = isPrescriptionRequest(text);
     const remainingAfter = maxTexts - newCount;
 
@@ -156,7 +132,7 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
         const limitMsg: ChatMessage = {
           id: `msg-${Date.now()}-limit`,
           role: 'assistant',
-          content: `You have used all ${maxTexts} text messages in your plan. Your balance is now ₹0. The doctor will respond within 24 hours. If the doctor does not respond within 24 hours, you will receive a full refund automatically. You can upgrade to Essential Plus or start an audio/video call for more access.`,
+          content: `You have used all ${maxTexts} text messages included in this plan. You can choose another plan for additional messages.`,
           createdAt: new Date().toISOString(),
         };
         setMessages(prev => [...prev, limitMsg]);
@@ -165,13 +141,9 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
     }
 
     setTimeout(() => {
-      let replyContent: string;
-
-      if (wantsPrescription) {
-        replyContent = generatePrescriptionResponse(chiefComplaint);
-      } else {
-        replyContent = generateAssistantResponse(text);
-      }
+      const replyContent = wantsPrescription
+        ? 'I cannot provide or invent a prescription. Medication decisions require a licensed clinician to review your symptoms and medical history.'
+        : generateAssistantResponse(text);
 
       const reply: ChatMessage = {
         id: `msg-${Date.now()}-reply`,
@@ -180,19 +152,6 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, reply]);
-
-      if (wantsPrescription && !replyContainsPrescription(replyContent)) {
-        setPenaltyDeducted(prev => prev + 5);
-        setTimeout(() => {
-          const penaltyMsg: ChatMessage = {
-            id: `msg-${Date.now()}-penalty`,
-            role: 'assistant',
-            content: `Prescription not provided within the consultation. A penalty of ₹5 has been deducted from the doctor's earnings and will be refunded to your account.`,
-            createdAt: new Date().toISOString(),
-          };
-          setMessages(prev => [...prev, penaltyMsg]);
-        }, 600);
-      }
     }, 900);
   };
 
@@ -309,21 +268,9 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
 
         {maxTexts > 0 && (
           <div className="max-w-3xl mx-auto px-4 pb-2">
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-1.5 text-xs">
-              <span className="flex items-center gap-1.5 text-slate-500">
-                <IndianRupee className="w-3.5 h-3.5 text-teal-600" />
-                Balance: <span className="font-semibold text-slate-700">₹{balanceRemaining.toFixed(2)}</span>
-                <span className="text-slate-400">of ₹{tier.price}</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-500">
-                Per text: <span className="font-semibold text-slate-700">₹{perTextCost.toFixed(2)}</span>
-              </span>
-              {penaltyDeducted > 0 && (
-                <span className="flex items-center gap-1 text-amber-600 font-medium">
-                  <Pill className="w-3.5 h-3.5" />
-                  ₹{penaltyDeducted} refunded
-                </span>
-              )}
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5 text-teal-600" /> Included messages used</span>
+              <span className="font-semibold text-slate-700">{messageCount} of {maxTexts}</span>
             </div>
           </div>
         )}
@@ -333,7 +280,7 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
         {maxTexts > 0 && (
           <div className="flex items-center gap-2 rounded-xl bg-teal-50 px-4 py-2.5 text-xs text-teal-800 border border-teal-100">
             <Clock3 className="h-4 w-4 shrink-0" />
-            Doctor will respond within 24 hours. If no response, you get a full refund. Each text costs ₹{perTextCost.toFixed(2)}. Used {messageCount} of {maxTexts} texts.
+            This plan includes {maxTexts} text messages. Used {messageCount}.
           </div>
         )}
         {messages.map(msg => (
@@ -363,12 +310,6 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
                 }`}>
                   {msg.content}
                 </div>
-                {msg.role === 'user' && maxTexts > 0 && (
-                  <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-400">
-                    <IndianRupee className="w-2.5 h-2.5" />
-                    ₹{perTextCost.toFixed(2)} deducted
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -437,7 +378,7 @@ export default function ChatScreen({ lang, doctor, tier, chiefComplaint, symptom
             {!isDoctorReplied && <div className="absolute inset-x-4 bottom-20 flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-center text-xs font-medium text-amber-800 shadow-sm"><LockKeyhole className="h-4 w-4 shrink-0" /> Doctor review in progress. Your reply box will unlock automatically.</div>}
             {!canSend && isDoctorReplied && (
               <div className="absolute inset-x-4 bottom-20 flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50/95 px-3 py-2 text-center text-xs font-medium text-red-700 shadow-sm">
-                <MessageSquare className="h-4 w-4 shrink-0" /> All {maxTexts} texts used. Balance is ₹0. Upgrade for more messages.
+                <MessageSquare className="h-4 w-4 shrink-0" /> All {maxTexts} included messages used. Choose another plan for more.
               </div>
             )}
             <button

@@ -82,7 +82,7 @@ export default function App() {
     const handleGoHome = () => { setProcedure(null); setDoctor(null); setTier(null); setChiefComplaint(''); setSymptomDuration(''); setScreen('home'); };
 
     switch (screen) {
-      case 'language': return <LanguageScreen onContinue={handleLanguageContinue} />;
+      case 'language': return <LanguageScreen initialLanguage={lang} onContinue={handleLanguageContinue} />;
       case 'home': return <HomeScreen lang={lang} userName={profile.full_name} userId={profile.id} userRole={profile.role} onSelectProcedure={handleSelectProcedure} onChangeLanguage={() => setScreen('language')} onLogout={handleLogout} />;
       case 'doctors': return procedure ? <DoctorsScreen lang={lang} procedure={procedure} onBack={() => setScreen('home')} onSelectDoctor={handleSelectDoctor} /> : null;
       case 'triage': return doctor ? <TriageScreen lang={lang} doctor={doctor} onBack={() => setScreen('doctors')} onContinue={(complaint, duration) => { setChiefComplaint(complaint); setSymptomDuration(duration); setScreen('pricing'); }} /> : null;

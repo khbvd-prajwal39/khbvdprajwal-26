@@ -6,11 +6,12 @@ import { useState } from 'react';
 import BrandLogo from '@/components/BrandLogo';
 
 interface Props {
+  initialLanguage: LanguageCode;
   onContinue: (lang: LanguageCode) => void;
 }
 
-export default function LanguageScreen({ onContinue }: Props) {
-  const [selected, setSelected] = useState<LanguageCode>('en');
+export default function LanguageScreen({ initialLanguage, onContinue }: Props) {
+  const [selected, setSelected] = useState<LanguageCode>(initialLanguage);
   const [search, setSearch] = useState('');
 
   const filtered = LANGUAGES.filter(l =>

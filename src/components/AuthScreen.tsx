@@ -224,12 +224,12 @@ export default function AuthScreen({ onAuthenticated }: Props) {
           <div className="space-y-3">
             {mode === 'register' && <>
               <input className="field" placeholder="Full name" value={fullName} onChange={e => setFullName(e.target.value)} />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input className="field" type="number" min="18" max="120" placeholder="Age (18+ required)" value={age} onChange={e => setAge(e.target.value)} />
                 <select className="field" value={gender} onChange={e => setGender(e.target.value)}><option value="">Gender</option><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select>
               </div>
               <textarea className="field min-h-20 resize-none" placeholder="Address" value={address} onChange={e => setAddress(e.target.value)} />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <select className="field" value={state} onChange={e => { setState(e.target.value); setDistrict(''); }}>
                   <option value="">Select State</option>
                   {STATE_NAMES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -239,7 +239,7 @@ export default function AuthScreen({ onAuthenticated }: Props) {
                   {districts.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input className="field" inputMode="numeric" maxLength={6} placeholder="Pincode" value={pincode} onChange={e => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3">
                   <span className="text-sm text-slate-400 font-medium">+91</span>

@@ -7,7 +7,7 @@ import {
   Sparkles, Bone, AlignHorizontalJustifyCenter, Sun, Wind, Activity, Syringe, Smile, PawPrint, Milk,
   Stethoscope, Search, Star, ChevronRight, Globe, Menu, X, ReceiptText, Users, HelpCircle, LogOut, UserCircle,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { TourGate, type TourStep } from '@/components/GuidedTour';
 import { supabase } from '@/lib/supabase';
 
@@ -25,6 +25,21 @@ interface Props {
   onLogout: () => void;
 }
 
+interface PaymentHistoryItem {
+  id: string;
+  amount: number;
+  status: string;
+  payment_method: string;
+  created_at: string;
+  doctor_id: string | null;
+}
+
+interface DirectoryDoctor {
+  id: string;
+  full_name: string;
+  specialty: string;
+}
+
 export default function HomeScreen({ lang, userName, userId, userRole, onSelectProcedure, onChangeLanguage, onLogout }: Props) {
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -32,6 +47,10 @@ export default function HomeScreen({ lang, userName, userId, userRole, onSelectP
   const [supportCategory, setSupportCategory] = useState('consultation');
   const [supportDescription, setSupportDescription] = useState('');
   const [supportNotice, setSupportNotice] = useState('');
+  const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryItem[]>([]);
+  const [directoryDoctors, setDirectoryDoctors] = useState<DirectoryDoctor[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
 
   const filtered = useMemo(() => {
     if (!search) return PROCEDURES;
@@ -40,6 +59,56 @@ export default function HomeScreen({ lang, userName, userId, userRole, onSelectP
       p.category.toLowerCase().includes(search.toLowerCase())
     );
   }, [search]);
+
+  useEffect(() => {
+    if (panel !== 'transactions' && panel !== 'doctors') return;
+    let active = true;
+    setHistoryLoading(true);
+    setHistoryError('');
+
+    const loadHistory = async () => {
+      const { data: payments, error: paymentError } = await supabase
+        .from('payment_records')
+        .select('id, amount, status, payment_method, created_at, doctor_id')
+        .eq('patient_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (!active) return;
+      if (paymentError) {
+        setHistoryError('Could not load your payment history. Please try again.');
+        setHistoryLoading(false);
+        return;
+      }
+
+      setPaymentHistory((payments ?? []) as PaymentHistoryItem[]);
+      if (panel === 'doctors') {
+        const { data: doctors, error: doctorsError } = await supabase.rpc('list_khbvd_approved_doctors');
+        if (!active) return;
+        if (doctorsError) {
+          setHistoryError('Could not load your doctor history. Please try again.');
+        } else {
+          setDirectoryDoctors((doctors ?? []) as DirectoryDoctor[]);
+        }
+      }
+      setHistoryLoading(false);
+    };
+
+    void loadHistory();
+    return () => { active = false; };
+  }, [panel, userId]);
+
+  const mostUsedDoctors = useMemo(() => {
+    const uses = new Map<string, number>();
+    for (const payment of paymentHistory) {
+      if (payment.status === 'paid' && payment.doctor_id) {
+        uses.set(payment.doctor_id, (uses.get(payment.doctor_id) ?? 0) + 1);
+      }
+    }
+    return [...uses.entries()]
+      .map(([id, count]) => ({ doctor: directoryDoctors.find(item => item.id === id), count }))
+      .filter((item): item is { doctor: DirectoryDoctor; count: number } => Boolean(item.doctor))
+      .sort((left, right) => right.count - left.count);
+  }, [directoryDoctors, paymentHistory]);
 
   const TOUR_STEPS: TourStep[] = [
     { selector: '[data-tour="menu"]', title: 'Navigation Menu', description: 'Tap the menu icon to access your transactions, most-used doctors, help, and logout.' },
@@ -67,7 +136,44 @@ export default function HomeScreen({ lang, userName, userId, userRole, onSelectP
 
       {menuOpen && <div className="fixed inset-0 z-30 bg-slate-950/30" onClick={() => setMenuOpen(false)}><aside className="h-full w-80 max-w-[86vw] bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}><div className="mb-8 flex items-center justify-between"><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-700"><UserCircle className="h-6 w-6" /></div><div><p className="font-semibold text-slate-800">{userName}</p><p className="text-xs capitalize text-slate-400">{userRole}</p></div></div><button onClick={() => setMenuOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div><nav className="space-y-2"><button onClick={() => { setPanel('transactions'); setMenuOpen(false); }} className="menu-item"><ReceiptText className="h-5 w-5" />Transactions</button><button onClick={() => { setPanel('doctors'); setMenuOpen(false); }} className="menu-item"><Users className="h-5 w-5" />Most used doctors</button><button onClick={() => { setPanel('support'); setMenuOpen(false); }} className="menu-item"><HelpCircle className="h-5 w-5" />Help and support</button><button onClick={onLogout} className="menu-item menu-item-danger"><LogOut className="h-5 w-5" />Log out</button></nav></aside></div>}
 
-      {panel && <div className="fixed inset-0 z-20 flex items-end justify-center bg-slate-950/30 p-4 sm:items-center" onClick={() => setPanel(null)}><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800">{panel === 'transactions' ? 'Transactions' : panel === 'doctors' ? 'Most used doctors' : 'Help and support'}</h2><button onClick={() => setPanel(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button></div>{panel === 'transactions' && <div className="rounded-2xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">Your consultation and payment history will appear here once you complete your first consultation.</div>}{panel === 'doctors' && <div className="space-y-3">{['Dr. Anjali Sharma', 'Dr. Rajesh Kumar', 'Dr. Vikram Singh'].map((name, index) => <div key={name} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"><div><p className="font-semibold text-slate-700">{name}</p><p className="text-xs text-slate-400">{index + 4}.{index + 5} rating · Verified</p></div><Star className="h-4 w-4 fill-amber-400 text-amber-400" /></div>)}</div>}{panel === 'support' && <div className="space-y-3 text-sm text-slate-600"><p>Need help with a consultation, payment, or your account?</p><select className="field" value={supportCategory} onChange={event => setSupportCategory(event.target.value)}><option value="consultation">Consultation</option><option value="payment">Payment</option><option value="account">Account</option><option value="technical">Technical issue</option><option value="other">Other</option></select><textarea className="field min-h-28 resize-none" placeholder="Describe how we can help" value={supportDescription} onChange={event => setSupportDescription(event.target.value)} />{supportNotice && <p className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-800">{supportNotice}</p>}<button onClick={async () => { if (supportDescription.trim().length < 1) { setSupportNotice('Please describe the issue first.'); return; } const { error } = await supabase.from('support_requests').insert({ requester_id: userId, issue_category: supportCategory, issue_description: supportDescription.trim() }); if (error) { console.error('support request failed', error); setSupportNotice('Could not send your request. Please try again.'); } else { setSupportDescription(''); setSupportNotice('Your request has been sent to the support team.'); } }} className="primary-button w-full">Send support request</button></div>}</div></div>}
+      {panel && (
+        <div className="fixed inset-0 z-20 flex items-end justify-center bg-slate-950/30 p-4 sm:items-center" onClick={() => setPanel(null)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={event => event.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">{panel === 'transactions' ? 'Transactions' : panel === 'doctors' ? 'Most used doctors' : 'Help and support'}</h2>
+              <button onClick={() => setPanel(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="Close panel"><X className="h-5 w-5" /></button>
+            </div>
+            {panel === 'transactions' && (
+              historyLoading ? <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">Loading transactions…</p> :
+              historyError ? <p role="alert" className="rounded-2xl bg-red-50 p-5 text-sm text-red-700">{historyError}</p> :
+              paymentHistory.length ? <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+                {paymentHistory.map(payment => (
+                  <div key={payment.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4">
+                    <div className="min-w-0">
+                      <p className="font-semibold capitalize text-slate-700">{payment.payment_method.replace(/_/g, ' ')} · {payment.status}</p>
+                      <p className="mt-1 text-xs text-slate-400">{new Date(payment.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <p className="shrink-0 font-semibold text-slate-800">₹{Number(payment.amount).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div> : <p className="rounded-2xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">No transactions yet.</p>
+            )}
+            {panel === 'doctors' && (
+              historyLoading ? <p className="rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">Loading doctors…</p> :
+              historyError ? <p role="alert" className="rounded-2xl bg-red-50 p-5 text-sm text-red-700">{historyError}</p> :
+              mostUsedDoctors.length ? <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+                {mostUsedDoctors.map(({ doctor, count }) => (
+                  <div key={doctor.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4">
+                    <div className="min-w-0"><p className="truncate font-semibold text-slate-700">{doctor.full_name}</p><p className="text-xs text-slate-400">{doctor.specialty}</p></div>
+                    <span className="shrink-0 text-xs font-medium text-teal-700">{count} {count === 1 ? 'consultation' : 'consultations'}</span>
+                  </div>
+                ))}
+              </div> : <p className="rounded-2xl bg-slate-50 p-5 text-sm leading-relaxed text-slate-500">Your doctors will appear here after a completed payment.</p>
+            )}
+            {panel === 'support' && <div className="space-y-3 text-sm text-slate-600"><p>Need help with a consultation, payment, or your account?</p><select className="field" value={supportCategory} onChange={event => setSupportCategory(event.target.value)}><option value="consultation">Consultation</option><option value="payment">Payment</option><option value="account">Account</option><option value="technical">Technical issue</option><option value="other">Other</option></select><textarea className="field min-h-28 resize-none" placeholder="Describe how we can help" value={supportDescription} onChange={event => setSupportDescription(event.target.value)} />{supportNotice && <p className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-800">{supportNotice}</p>}<button onClick={async () => { if (supportDescription.trim().length < 1) { setSupportNotice('Please describe the issue first.'); return; } const { error } = await supabase.from('support_requests').insert({ requester_id: userId, issue_category: supportCategory, issue_description: supportDescription.trim() }); if (error) { console.error('support request failed', error); setSupportNotice('Could not send your request. Please try again.'); } else { setSupportDescription(''); setSupportNotice('Your request has been sent to the support team.'); } }} className="primary-button w-full">Send support request</button></div>}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto px-5 pt-8 pb-16">
         <div className="mb-8">

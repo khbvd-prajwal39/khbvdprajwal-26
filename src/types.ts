@@ -31,6 +31,7 @@ export interface Doctor {
   rating: number;
   status: DoctorStatus;
   specialty: string;
+  category?: 'human' | 'veterinary';
   initials: string;
   prices?: Partial<Record<PricingTier, number>>;
 }

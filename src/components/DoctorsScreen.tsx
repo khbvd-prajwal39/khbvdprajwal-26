@@ -17,14 +17,15 @@ export default function DoctorsScreen({ lang, procedure, onBack, onSelectDoctor 
   useEffect(() => {
     supabase.rpc('list_khbvd_approved_doctors').then(({ data }) => {
       if (!data) return;
-      setApprovedDoctors(data.map((row: { id: string; full_name: string; specialty: string; district: string; city: string; years_experience: number; essential_price: number; essential_plus_price: number; audio_price: number; video_price: number }) => ({
+      setApprovedDoctors(data.map((row: { id: string; full_name: string; specialty: string; doctor_category: 'human' | 'veterinary'; district: string; city: string; years_experience: number; essential_price: number; essential_plus_price: number; audio_price: number; video_price: number }) => ({
         id: row.id,
         name: row.full_name,
         location: `${row.city}, ${row.district}`,
         experience: row.years_experience,
         rating: 5,
-        status: 'online',
+        status: 'offline',
         specialty: row.specialty,
+        category: row.doctor_category,
         initials: row.full_name.split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase(),
         prices: { essential: Number(row.essential_price), essential_plus: Number(row.essential_plus_price), audio: Number(row.audio_price), video: Number(row.video_price) },
       })));
@@ -32,7 +33,17 @@ export default function DoctorsScreen({ lang, procedure, onBack, onSelectDoctor 
   }, [procedure.id]);
 
   const doctors = useMemo(() => {
-    const matchesCategory = (doctor: Doctor) => procedure.category === 'Veterinary' ? doctor.specialty.toLowerCase().includes('veter') : !doctor.specialty.toLowerCase().includes('veter');
+    const specialtyKeywords: Record<string, string[]> = {
+      Dentistry: ['dental', 'dentist', 'orthodont', 'endodont'],
+      Dermatology: ['dermat'],
+      'Cosmetic Surgery': ['cosmetic', 'plastic', 'aesthetic'],
+    };
+    const matchesCategory = (doctor: Doctor) => {
+      if (procedure.category === 'Veterinary') return doctor.category === 'veterinary' || (!doctor.category && doctor.specialty.toLowerCase().includes('veter'));
+      if (doctor.category === 'veterinary' || doctor.specialty.toLowerCase().includes('veter')) return false;
+      const keywords = specialtyKeywords[procedure.category];
+      return !keywords || keywords.some(keyword => doctor.specialty.toLowerCase().includes(keyword));
+    };
     return [...procedure.doctors, ...approvedDoctors.filter(doctor => matchesCategory(doctor) && !procedure.doctors.some(existing => existing.id === doctor.id))];
   }, [approvedDoctors, procedure]);
   const onlineDoctors = doctors.filter(d => d.status === 'online');
