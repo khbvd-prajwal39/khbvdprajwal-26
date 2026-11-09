@@ -1,0 +1,2 @@
+[functions.phonepe-payment]
+verify_jwt = false

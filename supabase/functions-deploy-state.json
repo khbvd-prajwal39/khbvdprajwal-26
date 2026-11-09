@@ -1,0 +1,9 @@
+{
+  "projectId": "71740772",
+  "functions": {
+    "phonepe-payment": {
+      "hasChanged": false,
+      "hash": "b50b4d43be7fd4d78189a874243e6589c6821b3d5e0bbddd2b576005a8916e2a"
+    }
+  }
+}
